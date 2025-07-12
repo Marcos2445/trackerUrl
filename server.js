@@ -8,23 +8,31 @@ const { UserModel } = require('./UserModel');
 
 dotenv.config();
 
-const connectToMongoDB = async () => {
+const connectToMongoDBDev = async () => {
   await mongoose.connect(process.env.DB_URL);
   console.log('Connected to Mongo')
 };
 
-const port = process.env.PORT;
+const openAndCloseMongoDBConectionProd = async (callback) => {
+  if (process.env.ENVIRONMENT === "dev") return await callback();
 
-const start = async () => {
-  await connectToMongoDB();
-  
+  try {
+    await mongoose.connect(process.env.DB_URL);
+    await callback();
+  } finally {
+    await mongoose.disconnect();
+  }
+};
+
+const start = async () => {  
   if (process.env.ENVIRONMENT === "dev") {
+    await connectToMongoDBDev();         
+    
+    const port = process.env.PORT;
     app.listen(port, () => {
       console.log(`Application running on: http://localhost:${port}`);
-    })
+    });
   }
-
-  module.exports = app;
 };
 
 const app = express();
@@ -33,29 +41,32 @@ app.use(express.json());
 app.use(cors());
 
 app.post('/save-url', async (req, res) => {
-  const { url, userId } = req.body;
-  if (!url || !userId) throw new Error('Error');
+  await openAndCloseMongoDBConectionProd(async () => {
+    const { url, userId } = req.body;
+    if (!url || !userId) throw new Error('Error');
 
-  const user = await UserModel.findById(userId);
-  if (!user) throw new Error('USER_NOT_FOUND');
+    const user = await UserModel.findById(userId);
+    if (!user) throw new Error('USER_NOT_FOUND');
 
-  const model = new TrackingModel({ userId: new Types.ObjectId(userId), url });
-  await model.save()
+    const model = new TrackingModel({ userId: new Types.ObjectId(userId), url });
+    await model.save();
 
-  return res.status(201).send()
+    return res.status(201).send();
+  });
 });
 
 app.post('/create-user', async (req, res) => {
-  const { token } = req.headers;
-  if (!token || token !== process.env.CREATE_USER_TOKEN) throw new Error('INVALID_AUTHENTICATION')
+  await openAndCloseMongoDBConectionProd(async () => {
+    const { token } = req.headers;
+    if (!token || token !== process.env.CREATE_USER_TOKEN) throw new Error('INVALID_AUTHENTICATION');
+    
+    const user = new UserModel();
+    await user.save(); 
   
-  const user = new UserModel()
-  await user.save(); 
-
-  const id = user._id.toString();
-  const baseUrl = process.env.BASE_URL;
-
-  const script = `<script>
+    const id = user._id.toString();
+    const baseUrl = process.env.BASE_URL;
+  
+    const script = `<script>
   fetch("${baseUrl}/save-url", {
     method: "POST", 
     headers: { "Content-Type": "application/json" },
@@ -63,40 +74,44 @@ app.post('/create-user', async (req, res) => {
       userId: "${id}",
       url: window.location.href
     }),
- });
+  });
 </script>`;
-  
-  return res.status(200).header('Content-Type', 'text/plain').send(script);
+    
+    return res.status(200).header('Content-Type', 'text/plain').send(script);
+  });
 });
 
 
 app.delete('/delete-user', async (req, res) => {
-  const { token } = req.headers;
-  if (!token || token !== process.env.DELETE_USER_TOKEN) throw new Error('INVALID_AUTHENTICATION')
-
-  const id = req.body.userId
-  await UserModel.findByIdAndDelete(id)
-
-  return res.status(204).send()
+  await openAndCloseMongoDBConectionProd(async () => {
+    const { token } = req.headers;
+    if (!token || token !== process.env.DELETE_USER_TOKEN) throw new Error('INVALID_AUTHENTICATION');
+  
+    const id = req.body.userId;
+    await UserModel.findByIdAndDelete(id);
+  
+    return res.status(204).send();
+  });
 });
 
 app.get('/list-urls/:userId', async (req, res) => {
-  const { token } = req.headers;
-  if (!token || token !== process.env.LIST_URLS_TOKEN) throw new Error('INVALID_AUTHENTICATION')
-
-  const { userId } = req.params;
+  await openAndCloseMongoDBConectionProd(async () => {
+    const { token } = req.headers;
+    if (!token || token !== process.env.LIST_URLS_TOKEN) throw new Error('INVALID_AUTHENTICATION');
   
-  const models = await TrackingModel.find({
-    userId,
-  }).sort({ 
-    createdAt: -1,
-  }).limit(100);
-
-  const urls = models.map(({ url, createdAt }) => ({ url, createdAt }));
-
-
-  return res.status(200).json({
-    urls
+    const { userId } = req.params;
+    
+    const models = await TrackingModel.find({
+      userId,
+    }).sort({ 
+      createdAt: -1,
+    }).limit(100);
+  
+    const urls = models.map(({ url, createdAt }) => ({ url, createdAt }));
+  
+    return res.status(200).json({
+      urls,
+    });
   });
 });
 
@@ -114,3 +129,4 @@ app.use((err, _req, res, _next) => {
 
 start();
 
+module.exports = app;

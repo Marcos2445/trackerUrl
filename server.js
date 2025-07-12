@@ -1,13 +1,14 @@
-import dotenv from 'dotenv';
-import express from 'express';
-import cors from 'cors';
-import { TrackingModel } from './TrackingModel.mjs';
-import mongoose, { Types } from 'mongoose';
-import { UserModel } from './UserModel.mjs';
+const dotenv = require('dotenv');
+const express = require('express');
+const cors = require('cors');
+const { TrackingModel } = require('./TrackingModel');
+const mongoose = require('mongoose');
+const { Types } = mongoose;
+const { UserModel } = require('./UserModel');
 
 dotenv.config();
 
-export const connectToMongoDB = async () => {
+const connectToMongoDB = async () => {
   await mongoose.connect(process.env.DB_URL);
   console.log('Connected to Mongo')
 };

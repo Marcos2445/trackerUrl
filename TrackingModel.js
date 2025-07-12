@@ -1,4 +1,5 @@
-import mongoose, { Schema } from "mongoose";
+const mongoose = require('mongoose');
+const { Schema } = mongoose;
 
 const TrackingSchema = new Schema({
   userId: { type: Schema.Types.ObjectId, required: true },
@@ -9,4 +10,8 @@ const TrackingSchema = new Schema({
 TrackingSchema.index({ userId: 1 });
 TrackingSchema.index({ createdAt: -1 });
 
-export const TrackingModel = mongoose.model('trackings', TrackingSchema);
+const TrackingModel = mongoose.model('trackings', TrackingSchema);
+
+module.exports = {
+  TrackingModel,
+};

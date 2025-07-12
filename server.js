@@ -17,11 +17,14 @@ const port = process.env.PORT;
 
 const start = async () => {
   await connectToMongoDB();
+  
   if (process.env.ENVIRONMENT === "dev") {
     app.listen(port, () => {
       console.log(`Application running on: http://localhost:${port}`);
     })
   }
+
+  module.exports = app;
 };
 
 const app = express();
@@ -111,4 +114,3 @@ app.use((err, _req, res, _next) => {
 
 start();
 
-module.exports = app;
